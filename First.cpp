@@ -6,6 +6,7 @@
 #define MAX_WORD_LEN 256
 #define INITIAL_CAPACITY 10
 
+
 // Structure to hold the word list
 typedef struct {
     char **words;

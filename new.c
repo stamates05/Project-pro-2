@@ -13,6 +13,17 @@ typedef struct {
     int capacity;
 } WordList;
 
+// Trim leading and trailing whitespace
+char *trim(char *str) {
+    char *end;
+    while (isspace((unsigned char)*str)) str++;
+    if (*str == 0) return str;
+    end = str + strlen(str) - 1;
+    while (end > str && isspace((unsigned char)*end)) end--;
+    *(end + 1) = 0;
+    return str;
+}
+
 // Initialize the word list
 void initWordList(WordList *list) {
     list->capacity = INITIAL_CAPACITY;
@@ -49,44 +60,53 @@ void freeWordList(WordList *list) {
 // Case-insensitive string comparison
 int strcasecmp(const char *s1, const char *s2) {
     while (*s1 && *s2) {
-        if (tolower(*s1) != tolower(*s2)) {
-            return tolower(*s1) - tolower(*s2);
+        if (tolower((unsigned char)*s1) != tolower((unsigned char)*s2)) {
+            return tolower((unsigned char)*s1) - tolower((unsigned char)*s2);
         }
         s1++;
         s2++;
     }
-    return tolower(*s1) - tolower(*s2);
+    return tolower((unsigned char)*s1) - tolower((unsigned char)*s2);
 }
 
 // Case-insensitive substring search
 char *strcasestr(const char *haystack, const char *needle) {
-    char *h = strdup(haystack);
-    char *n = strdup(needle);
-    for (char *p = h; *p; p++) *p = tolower(*p);
-    for (char *p = n; *p; p++) *p = tolower(*p);
-    char *result = strstr(h, n);
-    if (result) {
-        result = (char *)(haystack + (result - h));
+    if (!*needle) return (char *)haystack;
+    size_t nlen = strlen(needle);
+    for (size_t i = 0; haystack[i]; i++) {
+        size_t j = 0;
+        while (j < nlen && haystack[i + j] &&
+               tolower((unsigned char)haystack[i + j]) == tolower((unsigned char)needle[j])) {
+            j++;
+        }
+        if (j == nlen) return (char *)(haystack + i);
     }
-    free(h);
-    free(n);
-    return result;
+    return NULL;
 }
 
 // Insert a word into the list
 void insert(WordList *list, const char *word) {
+    char *trimmed = trim((char *)word);
+    if (strlen(trimmed) == 0) {
+        printf("Error: Cannot insert empty word\n");
+        return;
+    }
     resizeWordList(list);
-    list->words[list->size] = strdup(word);
+    list->words[list->size] = strdup(trimmed);
     if (!list->words[list->size]) {
         fprintf(stderr, "Memory allocation failed\n");
         exit(1);
     }
     list->size++;
-    printf("Inserted: %s\n", word);
+    printf("Inserted: %s\n", trimmed);
 }
 
 // Find the nth occurrence of a pattern (forward direction)
 void findfwd(WordList *list, const char *pattern, int n) {
+    if (n <= 0) {
+        printf("Error: Invalid occurrence number %d\n", n);
+        return;
+    }
     int count = 0;
     for (int i = 0; i < list->size; i++) {
         if (strcasestr(list->words[i], pattern)) {
@@ -102,6 +122,10 @@ void findfwd(WordList *list, const char *pattern, int n) {
 
 // Find the nth occurrence of a pattern (reverse direction)
 void findrev(WordList *list, const char *pattern, int n) {
+    if (n <= 0) {
+        printf("Error: Invalid occurrence number %d\n", n);
+        return;
+    }
     int count = 0;
     for (int i = list->size - 1; i >= 0; i--) {
         if (strcasestr(list->words[i], pattern)) {
@@ -122,6 +146,10 @@ int compareWords(const void *a, const void *b) {
 
 // Show the last n words in reverse alphabetical order
 void showrev(WordList *list, int n) {
+    if (n <= 0) {
+        printf("Error: Invalid number of words %d\n", n);
+        return;
+    }
     n = (n > list->size) ? list->size : n;
     if (n == 0) {
         printf("No words to display.\n");
@@ -143,10 +171,10 @@ void showrev(WordList *list, int n) {
     // Sort in reverse alphabetical order
     qsort(temp, n, sizeof(char *), compareWords);
 
-    // Print the sorted words
+    // Print the sorted words with aligned formatting
     printf("Last %d words in reverse alphabetical order:\n", n);
     for (int i = 0; i < n; i++) {
-        printf("%d. %s\n", i + 1, temp[i]);
+        printf("%-4d %s\n", i + 1, temp[i]);
     }
 
     free(temp);
@@ -154,26 +182,38 @@ void showrev(WordList *list, int n) {
 
 // Load words from a file
 void load(WordList *list, const char *filename) {
-    FILE *file = fopen(filename, "r");
+    char *trimmed = trim((char *)filename);
+    if (strlen(trimmed) == 0) {
+        printf("Error: Invalid filename\n");
+        return;
+    }
+    FILE *file = fopen(trimmed, "r");
     if (!file) {
-        printf("Cannot open file '%s'.\n", filename);
+        printf("Cannot open file '%s'.\n", trimmed);
         return;
     }
 
     char buffer[MAX_WORD_LEN];
     while (fgets(buffer, MAX_WORD_LEN, file)) {
         buffer[strcspn(buffer, "\n")] = 0; // Remove newline
-        insert(list, buffer);
+        if (strlen(trim(buffer)) > 0) { // Skip empty lines
+            insert(list, buffer);
+        }
     }
     fclose(file);
-    printf("Loaded words from '%s'.\n", filename);
+    printf("Loaded words from '%s'.\n", trimmed);
 }
 
 // Save words to a file
 void save(WordList *list, const char *filename) {
-    FILE *file = fopen(filename, "w");
+    char *trimmed = trim((char *)filename);
+    if (strlen(trimmed) == 0) {
+        printf("Error: Invalid filename\n");
+        return;
+    }
+    FILE *file = fopen(trimmed, "w");
     if (!file) {
-        printf("Cannot open file '%s'.\n", filename);
+        printf("Cannot open file '%s'.\n", trimmed);
         return;
     }
 
@@ -181,7 +221,19 @@ void save(WordList *list, const char *filename) {
         fprintf(file, "%s\n", list->words[i]);
     }
     fclose(file);
-    printf("Saved words to '%s'.\n", filename);
+    printf("Saved words to '%s'.\n", trimmed);
+}
+
+// Print guidance message for available commands
+void printGuidance() {
+    printf("\nAvailable commands:\n");
+    printf("  insert <word/phrase>         : Insert a word or phrase into the list\n");
+    printf("  findfwd <pattern> <n>        : Find the nth occurrence of pattern (forward)\n");
+    printf("  findrev <pattern> <n>        : Find the nth occurrence of pattern (reverse)\n");
+    printf("  showrev <n>                  : Show last n words in reverse alphabetical order\n");
+    printf("  load <filename>              : Load words from a file\n");
+    printf("  save <filename>              : Save word list to a file\n");
+    printf("  exit                         : Quit the program\n");
 }
 
 int main() {
@@ -189,38 +241,57 @@ int main() {
     initWordList(&list);
     char line[1024];
 
-    printf("Enter commands (type 'exit' to quit):\n");
-    while (fgets(line, sizeof(line), stdin)) {
+    while (1) {
+        printGuidance();
+        printf("Enter commands (type 'exit' to quit):\n");
+        if (!fgets(line, sizeof(line), stdin)) {
+            break; // Handle EOF
+        }
         line[strcspn(line, "\n")] = 0; // Remove newline
-        if (strcmp(line, "exit") == 0) {
+        char *trimmed_line = trim(line);
+        if (strcmp(trimmed_line, "exit") == 0) {
             break;
+        }
+        if (strlen(trimmed_line) == 0) {
+            printf("Error: Empty command\n");
+            continue;
         }
 
         char command[20], arg1[256];
         int n;
-        // Check for commands with a number argument (findfwd, findrev, showrev)
-        if (sscanf(line, "%s %s %d", command, arg1, &n) == 3) {
-            if (strcmp(command, "findfwd") == 0) {
-                findfwd(&list, arg1, n);
-            } else if (strcmp(command, "findrev") == 0) {
-                findrev(&list, arg1, n);
-            } else {
-                printf("Invalid command: %s\n", line);
+        // Check for commands with pattern and number (findfwd, findrev)
+        if (sscanf(trimmed_line, "%s %s %d", command, arg1, &n) == 3) {
+            char *trimmed_arg = trim(arg1);
+            if (strlen(trimmed_arg) == 0) {
+                printf("Error: Invalid pattern\n");
+                continue;
             }
-        } else if (sscanf(line, "%s %d", command, &n) == 2 && strcmp(command, "showrev") == 0) {
-            showrev(&list, n);
-        } else if (sscanf(line, "%s %[^\n]", command, arg1) == 2) {
-            if (strcmp(command, "insert") == 0) {
-                insert(&list, arg1);
-            } else if (strcmp(command, "load") == 0) {
-                load(&list, arg1);
-            } else if (strcmp(command, "save") == 0) {
-                save(&list, arg1);
+            if (strcmp(command, "findfwd") == 0) {
+                findfwd(&list, trimmed_arg, n);
+            } else if (strcmp(command, "findrev") == 0) {
+                findrev(&list, trimmed_arg, n);
             } else {
-                printf("Invalid command: %s\n", line);
+                printf("Invalid command: %s\n", trimmed_line);
+            }
+        } else if (sscanf(trimmed_line, "%s %d", command, &n) == 2 && strcmp(command, "showrev") == 0) {
+            showrev(&list, n);
+        } else if (sscanf(trimmed_line, "%s %[^\n]", command, arg1) == 2) {
+            char *trimmed_arg = trim(arg1);
+            if (strlen(trimmed_arg) == 0) {
+                printf("Error: Invalid argument\n");
+                continue;
+            }
+            if (strcmp(command, "insert") == 0) {
+                insert(&list, trimmed_arg);
+            } else if (strcmp(command, "load") == 0) {
+                load(&list, trimmed_arg);
+            } else if (strcmp(command, "save") == 0) {
+                save(&list, trimmed_arg);
+            } else {
+                printf("Invalid command: %s\n", trimmed_line);
             }
         } else {
-            printf("Invalid command: %s\n", line);
+            printf("Invalid command: %s\n", trimmed_line);
         }
     }
 
